@@ -1,3 +1,26 @@
 spring:
   application:
     name: Chatter
+
+  datasource:
+    url: jdbc:mysql://localhost:3307/chatter
+    username: root
+    password: root
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+  flyway:
+    enabled: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/chatter
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+
