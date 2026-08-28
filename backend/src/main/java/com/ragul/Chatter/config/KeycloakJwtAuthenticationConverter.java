@@ -15,31 +15,37 @@ import java.util.stream.Stream;
 
 public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
+    private final String clientId;
+
+    public KeycloakJwtAuthenticationConverter(String clientId) {
+        this.clientId = clientId;
+    }
+
     @Override
-    public AbstractAuthenticationToken convert(@NonNull Jwt source) {
-        return new JwtAuthenticationToken(
-                source,
-                Stream.concat(
-                        new JwtGrantedAuthoritiesConverter().convert(source).stream(),
-                        extractResourceRoles(source).stream()
-                ).collect(Collectors.toSet())
+    public AbstractAuthenticationToken convert(@NonNull Jwt jwt) {
+
+        Set<GrantedAuthority> authorities = Stream.concat(
+                new JwtGrantedAuthoritiesConverter().convert(jwt).stream(),
+                extractResourceRoles(jwt).stream()).collect(Collectors.toSet()
         );
+
+        return new JwtAuthenticationToken(jwt, authorities);
     }
 
     private Collection<? extends GrantedAuthority> extractResourceRoles(Jwt jwt) {
-        var resourceAccess = new HashMap<>(jwt.getClaim("resource_access"));
+        Map<String, Object> resourceAccess = new HashMap<>(jwt.getClaim("resource_access"));
 
         if (resourceAccess == null) {
             return Collections.emptySet();
         }
 
-        var client = (Map<String, List<String>>) resourceAccess.get("account");
+        Map<String, Object> client = (Map<String, Object>) resourceAccess.get(clientId);
 
         if(client == null){
             return Collections.emptySet();
         }
 
-        var roles = client.get("roles");
+        List<String> roles = (List<String>) client.get("roles");
 
         if(roles == null){
             return Collections.emptyList();

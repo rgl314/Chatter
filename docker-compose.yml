@@ -1,0 +1,79 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_chatter
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: chatter
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - chatter-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.5.7
+    container_name: keycloak_chatter
+    ports:
+      - "9090:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: http://127.0.0.1:9090
+    networks:
+      - chatter-network
+    volumes:
+      - ./keycloak/chatter-realm.json:/opt/keycloak/data/import/chatter-realm.json
+    command: start-dev --import-realm
+    healthcheck:
+      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080" ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  backend:
+    build: ./backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/chatter
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://127.0.0.1:9090/realms/chatter
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/chatter/protocol/openid-connect/certs
+      APP_UPLOAD_DIR: /uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads-data:/uploads
+    networks:
+      - chatter-network
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    networks:
+      - chatter-network
+
+networks:
+  chatter-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  uploads-data:
